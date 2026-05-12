@@ -21,24 +21,49 @@ WEIGHTS_MAP = {
 
 def download_weights():
     import requests
+    import time
     from tqdm import tqdm
+    
+    logger.info("📡 NEURAL CORE: Initializing Weight Synchronization...")
     for path_str, url in WEIGHTS_MAP.items():
         path = Path(path_str)
         if not path.exists():
-            logger.info(f"Downloading missing weights: {path_str}...")
+            logger.info(f"🛰️  FETCHING: {path_str} (Target: {url})")
             path.parent.mkdir(parents=True, exist_ok=True)
-            response = requests.get(url, stream=True)
-            total_size = int(response.headers.get('content-length', 0))
-            with open(path, "wb") as f, tqdm(
-                desc=path_str,
-                total=total_size,
-                unit='iB',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                for data in response.iter_content(chunk_size=1024):
-                    size = f.write(data)
-                    bar.update(size)
+            
+            success = False
+            for attempt in range(3):
+                try:
+                    response = requests.get(url, stream=True, timeout=60)
+                    response.raise_for_status()
+                    total_size = int(response.headers.get('content-length', 0))
+                    
+                    temp_path = path.with_suffix(".tmp")
+                    with open(temp_path, "wb") as f, tqdm(
+                        desc=f"Attempt {attempt+1}: {path.name}",
+                        total=total_size,
+                        unit='iB',
+                        unit_scale=True,
+                        unit_divisor=1024,
+                    ) as bar:
+                        for data in response.iter_content(chunk_size=1024*1024): # 1MB chunks
+                            if data:
+                                f.write(data)
+                                bar.update(len(data))
+                    
+                    temp_path.rename(path)
+                    logger.info(f"✅ VERIFIED: {path_str} is online.")
+                    success = True
+                    break
+                except Exception as e:
+                    logger.warning(f"⚠️  RETRY {attempt+1}/3: {path_str} failed: {str(e)}")
+                    time.sleep(5)
+            
+            if not success:
+                logger.error(f"❌ CRITICAL: Neural path {path_str} could not be established.")
+                raise FileNotFoundError(f"Missing mandatory checkpoint: {path_str}")
+        else:
+            logger.info(f"🟢 PRE-FLIGHT: {path_str} confirmed.")
 
 # Add src and internal package to path for neural discovery
 root_dir = Path(__file__).parent
