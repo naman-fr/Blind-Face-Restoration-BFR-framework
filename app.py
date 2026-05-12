@@ -25,8 +25,28 @@ def download_weights():
     from tqdm import tqdm
     
     logger.info("📡 NEURAL CORE: Initializing Weight Synchronization...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
     for path_str, url in WEIGHTS_MAP.items():
         path = Path(path_str)
+        
+        # 🧪 Integrity Check: Delete corrupted files from previous failed attempts
+        if path.exists():
+            if path.stat().st_size < 1024 * 1024: # Less than 1MB is definitely a redirect/error page
+                logger.warning(f"🗑️  Corrupted weight detected (too small): {path_str}. Deleting...")
+                path.unlink()
+            else:
+                try:
+                    with open(path, 'rb') as f:
+                        header = f.read(100)
+                        if b"html" in header.lower() or header.startswith(b"v"):
+                            logger.warning(f"🗑️  Corrupted weight detected (invalid header): {path_str}. Deleting...")
+                            path.unlink()
+                except Exception:
+                    pass
+
         if not path.exists():
             logger.info(f"🛰️  FETCHING: {path_str} (Target: {url})")
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,7 +54,7 @@ def download_weights():
             success = False
             for attempt in range(3):
                 try:
-                    response = requests.get(url, stream=True, timeout=60)
+                    response = requests.get(url, stream=True, timeout=60, headers=headers)
                     response.raise_for_status()
                     total_size = int(response.headers.get('content-length', 0))
                     
