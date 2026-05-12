@@ -11,6 +11,7 @@ from pathlib import Path
 from einops import rearrange
 from collections import OrderedDict
 from loguru import logger
+from omegaconf import OmegaConf
 
 from bfr_framework.utils import util_net
 from bfr_framework.utils import util_image
@@ -57,10 +58,7 @@ class BaseSampler:
 
     def setup_seed(self, seed=None):
         if seed is None:
-            if hasattr(self.configs, 'seed'):
-                seed = self.configs.seed
-            else:
-                seed = 10000 # Default fallback
+            seed = OmegaConf.select(self.configs, 'seed', default=10000)
         seed += (self.rank) * 10000
         if self.rank == 0:
             print(f'Setting random seed {seed}', flush=True)
