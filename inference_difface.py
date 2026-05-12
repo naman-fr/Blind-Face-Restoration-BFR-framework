@@ -14,16 +14,24 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from skimage import img_as_ubyte
 
-from utils import util_opts
-from utils import util_image
-from utils import util_common
+import sys
+from pathlib import Path
 
-from sampler import DifFaceSampler
-from ResizeRight.resize_right import resize
-from basicsr.utils.download_util import load_file_from_url
+# Add src to sys.path for local package discovery
+src_path = str(Path(__file__).parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-from adaptive_n import estimate_degradation_severity, select_N_adaptive, create_comparison_image
-from ensemble import (ensemble_restore, weighted_ensemble_restore,
+from bfr_framework.utils import util_opts
+from bfr_framework.utils import util_image
+from bfr_framework.utils import util_common
+
+from bfr_framework.sampler import DifFaceSampler
+from bfr_framework.ResizeRight.resize_right import resize
+from bfr_framework.basicsr.utils.download_util import load_file_from_url
+
+from bfr_framework.adaptive_n import estimate_degradation_severity, select_N_adaptive, create_comparison_image
+from bfr_framework.ensemble import (ensemble_restore, weighted_ensemble_restore,
                       best_of_n_restore, save_ensemble_outputs, compute_sharpness)
 
 _START_TIMESTEPS = {'restoration': 100, 'inpainting': 120}

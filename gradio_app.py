@@ -7,10 +7,18 @@ import tempfile
 from pathlib import Path
 from omegaconf import OmegaConf
 from basicsr.utils.download_util import load_file_from_url
-from sampler import DifFaceSampler
-from utils import util_image
-from adaptive_n import estimate_degradation_severity, select_N_adaptive
-from ensemble import (ensemble_restore, weighted_ensemble_restore,
+import sys
+from pathlib import Path
+
+# Add src to sys.path for local package discovery
+src_path = str(Path(__file__).parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from bfr_framework.sampler import DifFaceSampler
+from bfr_framework.utils import util_image
+from bfr_framework.adaptive_n import estimate_degradation_severity, select_N_adaptive
+from bfr_framework.ensemble import (ensemble_restore, weighted_ensemble_restore,
                       best_of_n_restore, compute_sharpness)
 
 # Pre-load samplers for fast inference
@@ -208,54 +216,42 @@ def process_image(image, task, aligned, eta,
     status_text = "\n".join(status_lines)
     return result_img, status_text
 
-# Setup Gradio Interface
-css = """
-.container { max-width: 1200px; margin: auto; }
-#header { text-align: center; margin-bottom: 2rem; }
-#header h1 { font-size: 2.5rem; color: #fdfdfd; font-weight: 800; margin-bottom: 0.5rem; }
-#header p { font-size: 1.1rem; color: #a0aec0; }
-.gr-button-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; border: none !important; }
-.gr-button-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(118, 75, 162, 0.4); }
-.status-box { background: #1a202c; padding: 1rem; border-radius: 0.5rem; border: 1px solid #2d3748; }
-"""
-
-with gr.Blocks(title="AI Face Restoration", theme=gr.themes.Soft(primary_hue="purple", secondary_hue="slate")) as app:
-    with gr.Div(elem_id="header"):
-        gr.Markdown("# ✨ AI Blind Face Restoration (BFR)")
-        gr.Markdown("Restore low-quality, blurry, or noisy faces using Diffusion Models with Adaptive Timestep Selection and Best-of-N Ensemble.")
-
+with gr.Blocks(title="DifFace Restoration") as app:
+    gr.Markdown("# ✨ DifFace Face Restoration")
+    
     with gr.Row():
-        with gr.Column(scale=1):
-            with gr.Group():
-                gr.Markdown("### 📸 Input & Basic Settings")
-                input_img = gr.Image(label="Upload Face", type="numpy")
+        with gr.Column():
+            input_img = gr.Image(label="Input Image", type="numpy")
+            with gr.Row():
                 task = gr.Radio(["restoration", "inpainting"], label="Mode", value="restoration")
-                aligned = gr.Checkbox(label="Aligned Face (Cropped)", value=True)
-                eta = gr.Slider(0.0, 1.0, value=0.5, step=0.1, label="Fidelity vs Realness (Eta)")
-
-            with gr.Accordion("🚀 Advanced Enhancements (Delta 1 & 2)", open=True):
-                with gr.Group():
-                    gr.Markdown("#### Delta 1: Adaptive N Selection")
-                    use_adaptive_n = gr.Checkbox(label="Enable Dynamic N (Auto-detect degradation)", value=True)
-                    with gr.Row():
-                        n_min = gr.Slider(100, 500, value=250, step=10, label="Min Timestep")
-                        n_max = gr.Slider(200, 800, value=500, step=10, label="Max Timestep")
-
-                with gr.Group():
-                    gr.Markdown("#### Delta 2: Best-of-N Ensemble")
-                    use_ensemble = gr.Checkbox(label="Enable Ensemble (Multi-seed selection)", value=True)
-                    with gr.Row():
-                        num_seeds = gr.Slider(2, 10, value=5, step=1, label="Num Seeds")
-                        ensemble_mode = gr.Radio(["best", "mean", "weighted"], label="Mode", value="best")
-
-            submit_btn = gr.Button("🚀 Restore Image", variant="primary")
+                aligned = gr.Checkbox(label="Aligned", value=True)
+            eta = gr.Slider(0.0, 1.0, value=0.5, label="Eta")
             
-        with gr.Column(scale=1):
-            output_img = gr.Image(label="Restored Result")
-            with gr.Div(elem_classes="status-box"):
-                gr.Markdown("### 📊 Diagnostics & Analysis")
-                status_text = gr.Markdown("Ready for processing...")
+            with gr.Accordion("Advanced Settings", open=False):
+                use_adaptive_n = gr.Checkbox(label="Adaptive N", value=True)
+                n_min = gr.Slider(100, 500, value=250, label="N Min")
+                n_max = gr.Slider(200, 800, value=500, label="N Max")
+                use_ensemble = gr.Checkbox(label="Ensemble", value=True)
+                num_seeds = gr.Slider(2, 10, value=5, step=1, label="Seeds")
+                ensemble_mode = gr.Radio(["best", "mean", "weighted"], label="Ensemble Mode", value="best")
             
+            submit_btn = gr.Button("Restore", variant="primary")
+            
+        with gr.Column():
+            output_img = gr.Image(label="Result")
+            status_text = gr.Markdown("Ready")
+
+    gr.Examples(
+        examples=[
+            ["testdata/cropped_faces/0143.png", "restoration", True, 0.5, True, 250, 500, True, 5, "best"],
+            ["testdata/cropped_faces/0500.png", "restoration", True, 0.5, True, 250, 500, True, 5, "best"],
+        ],
+        inputs=[input_img, task, aligned, eta, use_adaptive_n, n_min, n_max, use_ensemble, num_seeds, ensemble_mode],
+        outputs=[output_img, status_text],
+        fn=process_image,
+        cache_examples=False,
+    )
+    
     submit_btn.click(
         fn=process_image,
         inputs=[input_img, task, aligned, eta,
@@ -265,4 +261,7 @@ with gr.Blocks(title="AI Face Restoration", theme=gr.themes.Soft(primary_hue="pu
     )
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860, share=False, css=css)
+    app.launch(server_name="0.0.0.0", server_port=7860)
+
+
+
