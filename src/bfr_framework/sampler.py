@@ -1,9 +1,11 @@
 import os, math, random, sys
 from pathlib import Path
 # Brute-force path discovery for neural models
-root_path = Path(__file__).parent.parent.parent
-sys.path.append(str(root_path))
-sys.path.append(str(root_path / "bfr_framework"))
+this_dir = Path(__file__).parent
+if str(this_dir) not in sys.path:
+    sys.path.append(str(this_dir))
+if str(this_dir.parent) not in sys.path:
+    sys.path.append(str(this_dir.parent))
 import cv2
 import numpy as np
 from tqdm import tqdm
