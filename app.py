@@ -18,6 +18,9 @@ sys.path.append(str(Path(__file__).parent / "src"))
 from bfr_framework.sampler import DifFaceSampler
 from bfr_framework.degradation_estimator import DegradationEstimator
 from bfr_framework.ensemble_selector import EnsembleSelector
+from bfr_framework.ensemble import ensemble_restore, weighted_ensemble_restore, best_of_n_restore
+from bfr_framework.utils import util_image
+import tempfile
 
 # --- NeoForge Aesthetic Matrix ---
 CSS = """
@@ -99,28 +102,73 @@ class NeoForgeBFR:
             cfg_path = f"configs/sample/{'iddpm_ffhq512_swinir.yaml' if task=='restoration' else 'difface_inpainting_lama256.yaml'}"
             configs = OmegaConf.load(cfg_path)
             configs.aligned = aligned
-            self.samplers[key] = DifFaceSampler(configs, use_fp16=torch.cuda.is_available())
+            # Use FP16 only if CUDA is available
+            use_fp16 = torch.cuda.is_available()
+            self.samplers[key] = DifFaceSampler(configs, use_fp16=use_fp16)
         return self.samplers[key]
 
     async def nexus_predict(self, image, task, aligned, eta, use_adaptive, use_ensemble, seeds):
         try:
             if image is None: return None, "⚠️ ACCESS DENIED: Image Missing."
             
-            # Neural Analysis
+            # 1. Initialize Sampler
+            sampler = self.get_sampler(task, aligned)
+            
+            # 2. Neural Analysis & Adaptive N
             n_step, severity, info = self.estimator.select_n_adaptive(image)
+            if not use_adaptive:
+                n_step = 100 # Default fallback
             
             # W&B Logging
             if wandb.run:
                 wandb.log({"severity": severity, "n_step": n_step})
 
-            # TODO: Temporal flow for video if sequence detected
+            # 3. Preparation: Save Gradio image to temp file
+            with tempfile.TemporaryDirectory() as tmpdir:
+                in_path = Path(tmpdir) / "input.png"
+                out_dir = Path(tmpdir) / "output"
+                out_dir.mkdir()
+                cv2.imwrite(str(in_path), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+
+                # 4. Perform Restoration
+                if use_ensemble:
+                    logger.info(f"Initiating {seeds}-seed ensemble restoration...")
+                    # For Gradio, we use the 'best' mode by default for quality
+                    restored_bgr, individual_results, best_idx = best_of_n_restore(
+                        sampler=sampler,
+                        in_path=str(in_path),
+                        out_dir=str(out_dir),
+                        num_seeds=int(seeds),
+                        start_timesteps=n_step,
+                        task=task,
+                        eta=eta,
+                        aligned=aligned
+                    )
+                else:
+                    logger.info("Initiating single-seed high-fidelity restoration...")
+                    sampler.inference(
+                        in_path=str(in_path),
+                        out_path=str(out_dir),
+                        bs=1,
+                        start_timesteps=n_step,
+                        task=task,
+                        need_restoration=True,
+                        eta=eta
+                    )
+                    # Find result
+                    res_subdir = "restored_faces" if aligned else "restored_image"
+                    res_path = sorted((out_dir / res_subdir).glob("*.png"))[0]
+                    restored_bgr = cv2.imread(str(res_path))
+
+            # 5. Post-process
+            restored_rgb = cv2.cvtColor(restored_bgr, cv2.COLOR_BGR2RGB)
             
-            # Mocking restoration for demo singularity
-            status = f"⚡ NEXUS STATUS: Severity {severity:.3f} | Optimal N: {n_step}\n"
-            status += f"🔮 ENSEMBLE: Active ({seeds} seeds)" if use_ensemble else "🔮 ENSEMBLE: Disabled"
+            status = f"⚡ NEXUS STATUS: Restoration Complete | Severity {severity:.3f} | Optimal N: {n_step}\n"
+            status += f"🔮 ENSEMBLE: Active ({seeds} seeds)" if use_ensemble else "🔮 ENSEMBLE: Single Pass"
             
-            return image, status
+            return restored_rgb, status
         except Exception as e:
+            logger.error(f"Nexus Error: {str(e)}")
             sentry_sdk.capture_exception(e)
             return None, f"❌ CRITICAL FAILURE: {str(e)}"
 
