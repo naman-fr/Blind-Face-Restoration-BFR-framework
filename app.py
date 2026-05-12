@@ -107,17 +107,22 @@ class NeoForgeBFR:
             self.samplers[key] = DifFaceSampler(configs, use_fp16=use_fp16)
         return self.samplers[key]
 
-    async def nexus_predict(self, image, task, aligned, eta, use_adaptive, use_ensemble, seeds):
+    async def nexus_predict(self, image, task, aligned, eta, use_adaptive, overdrive, use_ensemble, seeds):
         try:
             if image is None: return None, "⚠️ ACCESS DENIED: Image Missing."
             
             # 1. Initialize Sampler
             sampler = self.get_sampler(task, aligned)
             
-            # 2. Neural Analysis & Adaptive N
-            n_step, severity, info = self.estimator.select_n_adaptive(image, n_min=300, n_max=700)
-            if not use_adaptive:
-                n_step = 150 # Stronger restoration
+            # 2. Neural Analysis & Timestep Selection
+            if use_adaptive:
+                n_step, severity, info = self.estimator.select_n_adaptive(image, n_min=400, n_max=800)
+                logger.info(f"Adaptive N selected: {n_step} (Severity: {severity:.3f})")
+            else:
+                # Manual Overdrive (mapped from 1-10 to respaced 50-250)
+                n_step = int(overdrive * 25) 
+                severity = overdrive / 10.0
+                logger.info(f"Manual Overdrive engaged: N={n_step}")
             
             # W&B Logging
             if wandb.run:
@@ -167,8 +172,9 @@ class NeoForgeBFR:
             # 5. Post-process
             restored_rgb = cv2.cvtColor(restored_bgr, cv2.COLOR_BGR2RGB)
             
-            status = f"⚡ NEXUS STATUS: Restoration Complete | Severity {severity:.3f} | Optimal N: {n_step}\n"
-            status += f"🔮 ENSEMBLE: Active ({seeds} seeds)" if use_ensemble else "🔮 ENSEMBLE: Single Pass"
+            status = f"⚡ NEXUS v2.2 STATUS: [Restoration Successful]\n"
+            status += f"🧠 Mode: {'Adaptive' if use_adaptive else 'Overdrive'} | Optimal N: {n_step} | Severity: {severity:.3f}\n"
+            status += f"🔮 ENSEMBLE: {'Active (' + str(seeds) + ' seeds)' if use_ensemble else 'Single Pass'}"
             
             return restored_rgb, status
         except Exception as e:
@@ -181,8 +187,8 @@ core = NeoForgeBFR()
 
 with gr.Blocks(theme=gr.themes.Base(), css=CSS) as singularity:
     with gr.Column(elem_id="header"):
-        gr.Markdown("# 👾 BFR NEXUS v2.0")
-        gr.Markdown("Initializing 2027 Neural Architecture... [NeoForge Rogue AI Phase]")
+        gr.Markdown("# 👾 BFR NEXUS v2.2 [ULTRA-RESOLUTION]")
+        gr.Markdown("Neural Core: NeoForge v2.2-stable | Architecture: DifFace-SwinIR")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -194,12 +200,13 @@ with gr.Blocks(theme=gr.themes.Base(), css=CSS) as singularity:
                     aligned = gr.Checkbox(label="Aligned", value=True)
                 eta = gr.Slider(0, 1, value=0.5, label="Fidelity Leak (Eta)")
             
-            with gr.Accordion("Quantum Overrides", open=False):
-                use_adaptive = gr.Checkbox(label="Dynamic Timestep (Delta 1)", value=True)
-                use_ensemble = gr.Checkbox(label="Best-of-N Ensemble (Delta 2)", value=True)
-                num_seeds = gr.Slider(2, 8, value=4, step=1, label="Seeds")
+            with gr.Accordion("Neural Overrides", open=True):
+                use_adaptive = gr.Checkbox(label="Dynamic Timestep (Adaptive N)", value=True)
+                overdrive = gr.Slider(1, 10, value=6, step=1, label="Manual Overdrive (If Adaptive is off)")
+                use_ensemble = gr.Checkbox(label="Best-of-N Ensemble", value=True)
+                num_seeds = gr.Slider(2, 8, value=4, step=1, label="Neural Iterations (Seeds)")
             
-            submit = gr.Button("RESTORE REALITY ✨", variant="primary")
+            submit = gr.Button("RESTORE REALITY ✨", variant="primary", elem_id="restore-btn")
 
         with gr.Column(scale=1):
             output_img = gr.Image(label="Neural Reconstruction")
@@ -207,7 +214,7 @@ with gr.Blocks(theme=gr.themes.Base(), css=CSS) as singularity:
 
     submit.click(
         core.nexus_predict,
-        inputs=[input_img, task, aligned, eta, use_adaptive, use_ensemble, num_seeds],
+        inputs=[input_img, task, aligned, eta, use_adaptive, overdrive, use_ensemble, num_seeds],
         outputs=[output_img, info]
     )
 
