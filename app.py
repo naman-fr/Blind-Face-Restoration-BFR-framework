@@ -12,8 +12,10 @@ from loguru import logger
 # Initialize Sentry for Shadow Trace
 sentry_sdk.init(dsn=os.getenv("SENTRY_DSN", ""))
 
-# Add src to path for package discovery
-sys.path.append(str(Path(__file__).parent / "src"))
+# Add src and internal package to path for neural discovery
+root_dir = Path(__file__).parent
+sys.path.append(str(root_dir / "src"))
+sys.path.append(str(root_dir / "src" / "bfr_framework"))
 
 from bfr_framework.sampler import DifFaceSampler
 from bfr_framework.degradation_estimator import DegradationEstimator
@@ -102,8 +104,10 @@ class NeoForgeBFR:
             cfg_path = f"configs/sample/{'iddpm_ffhq512_swinir.yaml' if task=='restoration' else 'difface_inpainting_lama256.yaml'}"
             configs = OmegaConf.load(cfg_path)
             
-            # Defensive key injection
-            if 'seed' not in configs: configs.seed = 10000
+            # Disable struct mode to allow dynamic key injection
+            OmegaConf.set_struct(configs, False)
+            
+            if 'seed' not in configs or configs.seed is None: configs.seed = 10000
             if 'im_size' not in configs: configs.im_size = 512 if task=='restoration' else 256
             if 'aligned' not in configs: configs.aligned = aligned
             if 'gpu_id' not in configs: configs.gpu_id = ""
