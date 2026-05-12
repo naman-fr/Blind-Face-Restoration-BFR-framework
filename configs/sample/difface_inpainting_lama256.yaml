@@ -1,4 +1,11 @@
+gpu_id: ""
+seed: 10000
+display: True
+im_size: 256
+aligned: True
+
 diffusion:
+
   target: models.script_util.create_gaussian_diffusion
   params:
     steps: 1000

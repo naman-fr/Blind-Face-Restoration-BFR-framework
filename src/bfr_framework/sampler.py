@@ -56,7 +56,11 @@ class BaseSampler:
             self.model = torch.compile(self.model)
 
     def setup_seed(self, seed=None):
-        seed = self.configs.seed if seed is None else seed
+        if seed is None:
+            if hasattr(self.configs, 'seed'):
+                seed = self.configs.seed
+            else:
+                seed = 10000 # Default fallback
         seed += (self.rank) * 10000
         if self.rank == 0:
             print(f'Setting random seed {seed}', flush=True)
