@@ -115,9 +115,9 @@ class NeoForgeBFR:
             sampler = self.get_sampler(task, aligned)
             
             # 2. Neural Analysis & Adaptive N
-            n_step, severity, info = self.estimator.select_n_adaptive(image)
+            n_step, severity, info = self.estimator.select_n_adaptive(image, n_min=300, n_max=700)
             if not use_adaptive:
-                n_step = 100 # Default fallback
+                n_step = 150 # Stronger restoration
             
             # W&B Logging
             if wandb.run:
@@ -132,8 +132,7 @@ class NeoForgeBFR:
 
                 # 4. Perform Restoration
                 if use_ensemble:
-                    logger.info(f"Initiating {seeds}-seed ensemble restoration...")
-                    # For Gradio, we use the 'best' mode by default for quality
+                    logger.info(f"Initiating {seeds}-seed ensemble restoration (N={n_step})...")
                     restored_bgr, individual_results, best_idx = best_of_n_restore(
                         sampler=sampler,
                         in_path=str(in_path),
@@ -141,11 +140,11 @@ class NeoForgeBFR:
                         num_seeds=int(seeds),
                         start_timesteps=n_step,
                         task=task,
-                        eta=eta,
+                        eta=1.0, # Maximize stochastic diversity for ensemble
                         aligned=aligned
                     )
                 else:
-                    logger.info("Initiating single-seed high-fidelity restoration...")
+                    logger.info(f"Initiating single-pass restoration (N={n_step})...")
                     sampler.inference(
                         in_path=str(in_path),
                         out_path=str(out_dir),
@@ -155,10 +154,15 @@ class NeoForgeBFR:
                         need_restoration=True,
                         eta=eta
                     )
-                    # Find result
-                    res_subdir = "restored_faces" if aligned else "restored_image"
-                    res_path = sorted((out_dir / res_subdir).glob("*.png"))[0]
-                    restored_bgr = cv2.imread(str(res_path))
+                    # Robust search for the restored image
+                    res_files = list(out_dir.rglob("input.png"))
+                    if not res_files:
+                        res_files = list(out_dir.rglob("*.png"))
+                    
+                    if not res_files:
+                        raise FileNotFoundError("Reconstruction engine failed to materialize the output matrix.")
+                    
+                    restored_bgr = cv2.imread(str(res_files[0]))
 
             # 5. Post-process
             restored_rgb = cv2.cvtColor(restored_bgr, cv2.COLOR_BGR2RGB)
