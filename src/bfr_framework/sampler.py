@@ -1,9 +1,9 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-# Power by Zongsheng Yue 2022-07-13 16:59:27
-
-
-import os, math, random
+import os, math, random, sys
+from pathlib import Path
+# Brute-force path discovery for neural models
+root_path = Path(__file__).parent.parent.parent
+sys.path.append(str(root_path))
+sys.path.append(str(root_path / "bfr_framework"))
 import cv2
 import numpy as np
 from tqdm import tqdm
@@ -37,8 +37,13 @@ class BaseSampler:
             configs: config, see the yaml file in folder ./configs/sample/
         '''
         self.configs = configs
-        self.configs.im_size = im_size
-        self.configs.use_fp16 = use_fp16
+        # Brute-force config protection
+        from omegaconf import OmegaConf
+        OmegaConf.set_struct(self.configs, False)
+        if 'seed' not in self.configs: self.configs.seed = 10000
+        if 'im_size' not in self.configs: self.configs.im_size = im_size
+        if 'use_fp16' not in self.configs: self.configs.use_fp16 = use_fp16
+        if 'gpu_id' not in self.configs: self.configs.gpu_id = ""
         self.dtype = torch.float16 if use_fp16 else torch.float32
         if hasattr(self.configs.model.params, 'use_fp16'):
             self.configs.model.params.use_fp16 = use_fp16
