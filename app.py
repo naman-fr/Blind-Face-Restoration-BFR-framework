@@ -12,6 +12,34 @@ from loguru import logger
 # Initialize Sentry for Shadow Trace
 sentry_sdk.init(dsn=os.getenv("SENTRY_DSN", ""))
 
+WEIGHTS_MAP = {
+    "weights/diffusion/iddpm_ffhq512_ema500000.pth": "https://github.com/zsyOAOA/DifFace/releases/download/V1.0/iddpm_ffhq512_ema500000.pth",
+    "weights/estimator/swinir_restoration512_L1.pth": "https://github.com/zsyOAOA/DifFace/releases/download/V1.0/swinir_restoration512_L1.pth",
+    "weights/diffusion/iddpm_ffhq256_ema750000.pth": "https://github.com/zsyOAOA/DifFace/releases/download/V1.0/iddpm_ffhq256_ema750000.pth",
+    "weights/estimator/lama_inpainting256.pth": "https://github.com/zsyOAOA/DifFace/releases/download/V1.0/lama_inpainting256.pth",
+}
+
+def download_weights():
+    import requests
+    from tqdm import tqdm
+    for path_str, url in WEIGHTS_MAP.items():
+        path = Path(path_str)
+        if not path.exists():
+            logger.info(f"Downloading missing weights: {path_str}...")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            response = requests.get(url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            with open(path, "wb") as f, tqdm(
+                desc=path_str,
+                total=total_size,
+                unit='iB',
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as bar:
+                for data in response.iter_content(chunk_size=1024):
+                    size = f.write(data)
+                    bar.update(size)
+
 # Add src and internal package to path for neural discovery
 root_dir = Path(__file__).parent
 sys.path.append(str(root_dir / "src"))
@@ -90,6 +118,10 @@ footer { visibility: hidden; }
 
 class NeoForgeBFR:
     def __init__(self):
+        # 0. Ensure weights are present
+        download_weights()
+        
+        # 1. Initialize core components
         self.estimator = DegradationEstimator()
         self.selector = EnsembleSelector()
         self.samplers = {}
