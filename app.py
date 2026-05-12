@@ -128,7 +128,7 @@ class NeoForgeBFR:
 core = NeoForgeBFR()
 
 with gr.Blocks(theme=gr.themes.Base(), css=CSS) as singularity:
-    with gr.Div(elem_id="header"):
+    with gr.Column(elem_id="header"):
         gr.Markdown("# 👾 BFR NEXUS v2.0")
         gr.Markdown("Initializing 2027 Neural Architecture... [NeoForge Rogue AI Phase]")
 
