@@ -1,8 +1,8 @@
 cython
 setuptools<70.0.0
 numpy>=1.24.0,<2.0.0
-torch>=2.1.0
-torchvision>=0.16.0
+torch==2.1.2
+torchvision==0.16.2
 gradio>=4.20.0
 opencv-python-headless
 scipy>=1.11.0
@@ -19,6 +19,4 @@ basicsr @ git+https://github.com/XPixelGroup/BasicSR.git
 wandb
 sentry-sdk
 # For NeoForge Hyper-Advancements
-raft-pytorch
-onnxruntime-gpu
-quantization-ops
+onnxruntime
