@@ -19,5 +19,6 @@ gdown
 basicsr @ https://github.com/XPixelGroup/BasicSR/archive/master.zip
 wandb
 sentry-sdk
+huggingface-hub<0.25.0
 # For NeoForge Hyper-Advancements
 onnxruntime
