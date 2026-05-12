@@ -15,7 +15,7 @@ loguru>=0.7.0
 scikit-image>=0.21.0
 lpips
 gdown
-basicsr @ git+https://github.com/sczhou/BasicSR.git
+basicsr @ https://github.com/sczhou/BasicSR/archive/refs/heads/master.tar.gz
 wandb
 sentry-sdk
 # For NeoForge Hyper-Advancements
